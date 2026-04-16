@@ -1,1 +1,1 @@
-# clonetabnews
+# clone-tabnews
