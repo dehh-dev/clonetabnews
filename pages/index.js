@@ -1,8 +1,9 @@
 // pages/index.js
 //
-// Os números são buscados automaticamente da API oficial da Caixa Econômica.
-// Next.js regenera a página em background a cada 6 horas (ISR).
-// Nenhuma dependência extra necessária.
+// Sistema com fallback:
+// 1. Tenta buscar da API da Caixa
+// 2. Se funcionar → salva em data/resultados.json
+// 3. Se falhar → lê do arquivo JSON (último resultado conhecido)
 
 import { useState, useEffect } from "react";
 
@@ -202,7 +203,7 @@ function CardSorteio({ tipo, dados }) {
 // ---------------------------------------------------------------------------
 // Página principal
 // ---------------------------------------------------------------------------
-export default function Home({ lotofacil, lotomania, geradoEm }) {
+export default function Home({ lotofacil, lotomania, geradoEm, fonte }) {
   const [tempoAtual, setTempoAtual] = useState("");
 
   useEffect(() => {
@@ -329,7 +330,7 @@ export default function Home({ lotofacil, lotomania, geradoEm }) {
                 width: 7,
                 height: 7,
                 borderRadius: "50%",
-                background: "#4ade80",
+                background: fonte === "api" ? "#4ade80" : "#fbbf24",
                 animation: "pulse 1.5s ease-in-out infinite",
               }}
             />
@@ -341,7 +342,9 @@ export default function Home({ lotofacil, lotomania, geradoEm }) {
                 letterSpacing: 1,
               }}
             >
-              ATUALIZADO AUTOMATICAMENTE
+              {fonte === "api"
+                ? "ATUALIZADO AUTOMATICAMENTE"
+                : "CACHE (API OFFLINE)"}
             </span>
           </div>
 
@@ -392,53 +395,117 @@ export default function Home({ lotofacil, lotomania, geradoEm }) {
 }
 
 // ---------------------------------------------------------------------------
-// getStaticProps + ISR — executa no servidor, nunca expõe código ao browser
+// getStaticProps com cache local em JSON
 // ---------------------------------------------------------------------------
 
+import fs from "fs";
+import path from "path";
+
+const CACHE_FILE = path.join(process.cwd(), "data", "resultados.json");
+
+// Garante que o diretório data/ existe
+function garantirDiretorio() {
+  const dir = path.dirname(CACHE_FILE);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+// Lê o cache local
+function lerCache() {
+  try {
+    if (fs.existsSync(CACHE_FILE)) {
+      const conteudo = fs.readFileSync(CACHE_FILE, "utf-8");
+      return JSON.parse(conteudo);
+    }
+  } catch (err) {
+    console.error("[CACHE] Erro ao ler cache:", err.message);
+  }
+  return null;
+}
+
+// Salva resultados no cache
+function salvarCache(dados) {
+  try {
+    garantirDiretorio();
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(dados, null, 2), "utf-8");
+    console.log("[CACHE] Resultados salvos com sucesso");
+  } catch (err) {
+    console.error("[CACHE] Erro ao salvar cache:", err.message);
+  }
+}
+
+// Busca resultado da API da Caixa
 async function buscarResultado(jogo) {
   try {
     const url = `https://servicebus2.caixa.gov.br/portaldeloterias/api/${jogo}`;
     const res = await fetch(url, {
       headers: {
-        // A API da Caixa exige Referer para aceitar requisições de fora do portal
         Referer: "https://loterias.caixa.gov.br/",
         "User-Agent": "Mozilla/5.0",
       },
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(`[API] ${jogo} retornou status ${res.status}`);
+      return null;
+    }
 
     const json = await res.json();
-
-    // listaDezenas vem como strings ["01","03",...], convertemos para número
     const numeros = (json.listaDezenas || []).map((n) => parseInt(n, 10));
 
     return {
-      data: json.dataApuracao || "", // formato "DD/MM/YYYY"
+      data: json.dataApuracao || "",
       concurso: json.numero || 0,
       numeros,
     };
   } catch (err) {
-    console.error(`[ISR] Erro ao buscar ${jogo}:`, err.message);
-    return null; // card mostra "sem sorteio disponível"
+    console.error(`[API] Erro ao buscar ${jogo}:`, err.message);
+    return null;
   }
 }
 
 export async function getStaticProps() {
+  let fonte = "api"; // Identifica se os dados vieram da API ou do cache
+
+  // Tenta buscar da API
   const [lotofacil, lotomania] = await Promise.all([
     buscarResultado("lotofacil"),
     buscarResultado("lotomania"),
   ]);
 
+  // Se conseguiu buscar ambos, salva no cache
+  if (lotofacil && lotomania) {
+    salvarCache({ lotofacil, lotomania });
+    console.log("[ISR] Dados atualizados da API");
+  } else {
+    // Se algum falhou, tenta ler do cache
+    console.log("[ISR] API falhou, lendo do cache...");
+    const cache = lerCache();
+
+    if (cache) {
+      fonte = "cache";
+      return {
+        props: {
+          lotofacil: cache.lotofacil || null,
+          lotomania: cache.lotomania || null,
+          geradoEm: new Date().toISOString(),
+          fonte,
+        },
+        revalidate: 21600, // 6 horas
+      };
+    }
+
+    console.error("[ISR] Cache também não disponível");
+  }
+
   return {
     props: {
-      lotofacil, // null se a API falhou
-      lotomania,
+      lotofacil: lotofacil || null,
+      lotomania: lotomania || null,
       geradoEm: new Date().toISOString(),
+      fonte,
     },
-    // ISR: Next.js regenera a página em background a cada 6 horas.
-    // A primeira requisição após esse tempo dispara a atualização;
-    // os visitantes nunca ficam esperando — sempre servem a versão em cache.
-    revalidate: 21600, // 6 horas em segundos
+    revalidate: 21600,
   };
 }
