@@ -1,42 +1,14 @@
-import { useState } from "react";
+// pages/index.js
+//
+// Os números são buscados automaticamente da API oficial da Caixa Econômica.
+// Next.js regenera a página em background a cada 6 horas (ISR).
+// Nenhuma dependência extra necessária.
 
-// --- Dados dos sorteios (edite aqui os números do dia) ---
-const SORTEIOS = {
-  lotofacil: {
-    data: "17/04/2025",
-    concurso: 3382,
-    numeros: [1, 3, 5, 7, 9, 10, 12, 14, 16, 17, 19, 20, 22, 24, 25],
-  },
-  lotomania: {
-    data: "17/04/2025",
-    concurso: 2681,
-    numeros: [
-      4, 8, 13, 21, 27, 33, 38, 44, 51, 56, 62, 68, 74, 80, 85, 90, 95, 97, 99,
-      0,
-    ],
-  },
-};
+import { useState, useEffect } from "react";
 
-// Cores das bolas por jogo
-const CORES = {
-  lotofacil: {
-    bola: "#9B30FF",
-    bola2: "#C77DFF",
-    bg: "rgba(155,48,255,0.13)",
-    border: "rgba(155,48,255,0.45)",
-    glow: "0 0 18px 4px rgba(155,48,255,0.35)",
-    badge: "#9B30FF",
-  },
-  lotomania: {
-    bola: "#FF6B00",
-    bola2: "#FFA040",
-    bg: "rgba(255,107,0,0.13)",
-    border: "rgba(255,107,0,0.45)",
-    glow: "0 0 18px 4px rgba(255,107,0,0.35)",
-    badge: "#FF6B00",
-  },
-};
-
+// ---------------------------------------------------------------------------
+// Componente: Bola
+// ---------------------------------------------------------------------------
 function Bola({ numero, cor, cor2, glow, delay }) {
   const label = String(numero).padStart(2, "0");
   return (
@@ -65,10 +37,54 @@ function Bola({ numero, cor, cor2, glow, delay }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Cores por jogo
+// ---------------------------------------------------------------------------
+const CORES = {
+  lotofacil: {
+    bola: "#9B30FF",
+    bola2: "#C77DFF",
+    border: "rgba(155,48,255,0.45)",
+    glow: "0 0 18px 4px rgba(155,48,255,0.35)",
+    badge: "#9B30FF",
+  },
+  lotomania: {
+    bola: "#FF6B00",
+    bola2: "#FFA040",
+    border: "rgba(255,107,0,0.45)",
+    glow: "0 0 18px 4px rgba(255,107,0,0.35)",
+    badge: "#FF6B00",
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Componente: Card do Sorteio
+// ---------------------------------------------------------------------------
 function CardSorteio({ tipo, dados }) {
   const c = CORES[tipo];
   const titulo = tipo === "lotofacil" ? "Lotofácil" : "Lotomania";
   const icone = tipo === "lotofacil" ? "🍀" : "🎲";
+
+  if (!dados) {
+    return (
+      <div
+        style={{
+          background: "rgba(18,18,28,0.85)",
+          border: `1.5px solid ${c.border}`,
+          borderRadius: 20,
+          padding: "32px 36px",
+          width: "100%",
+          maxWidth: 640,
+          textAlign: "center",
+          color: "rgba(255,255,255,0.3)",
+          fontFamily: "'DM Mono', monospace",
+          fontSize: 13,
+        }}
+      >
+        {icone} {titulo} — sem sorteio disponível
+      </div>
+    );
+  }
 
   return (
     <div
@@ -90,6 +106,8 @@ function CardSorteio({ tipo, dados }) {
           alignItems: "center",
           justifyContent: "space-between",
           marginBottom: 20,
+          flexWrap: "wrap",
+          gap: 10,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -155,7 +173,7 @@ function CardSorteio({ tipo, dados }) {
       >
         {dados.numeros.map((n, i) => (
           <Bola
-            key={n}
+            key={`${n}-${i}`}
             numero={n}
             cor={c.bola}
             cor2={c.bola2}
@@ -173,7 +191,6 @@ function CardSorteio({ tipo, dados }) {
           fontSize: 12,
           color: "rgba(255,255,255,0.3)",
           textAlign: "center",
-          letterSpacing: 0.5,
         }}
       >
         {dados.numeros.length} números sorteados
@@ -182,12 +199,21 @@ function CardSorteio({ tipo, dados }) {
   );
 }
 
-export default function Home() {
-  const hoje = new Date().toLocaleDateString("pt-BR");
+// ---------------------------------------------------------------------------
+// Página principal
+// ---------------------------------------------------------------------------
+export default function Home({ lotofacil, lotomania, geradoEm }) {
+  const [tempoAtual, setTempoAtual] = useState("");
+
+  useEffect(() => {
+    if (geradoEm) {
+      const d = new Date(geradoEm);
+      setTempoAtual(d.toLocaleString("pt-BR"));
+    }
+  }, [geradoEm]);
 
   return (
     <>
-      {/* Fontes via Google Fonts */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=DM+Mono:wght@400;500&display=swap');
 
@@ -211,27 +237,21 @@ export default function Home() {
         }
 
         @keyframes pulse {
-          0%, 100% { opacity: 0.5; }
+          0%, 100% { opacity: 0.4; }
           50%       { opacity: 1; }
         }
       `}</style>
 
-      {/* Background com efeito de grade */}
+      {/* Fundo com gradiente */}
       <div
         style={{
           position: "fixed",
           inset: 0,
-          background: `
-            radial-gradient(ellipse 70% 50% at 20% 20%, rgba(155,48,255,0.12) 0%, transparent 60%),
-            radial-gradient(ellipse 60% 50% at 80% 80%, rgba(255,107,0,0.10) 0%, transparent 60%),
-            linear-gradient(180deg, #0a0a14 0%, #0d0d1a 100%)
-          `,
+          background: `radial-gradient(ellipse 70% 50% at 20% 20%, rgba(155,48,255,0.12) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 80% 80%, rgba(255,107,0,0.10) 0%, transparent 60%), linear-gradient(180deg, #0a0a14 0%, #0d0d1a 100%)`,
           zIndex: 0,
           pointerEvents: "none",
         }}
       />
-
-      {/* Grid de pontos decorativos */}
       <div
         style={{
           position: "fixed",
@@ -243,7 +263,7 @@ export default function Home() {
         }}
       />
 
-      {/* Conteúdo principal */}
+      {/* Conteúdo */}
       <main
         style={{
           position: "relative",
@@ -268,7 +288,7 @@ export default function Home() {
               marginBottom: 10,
             }}
           >
-            Resultado do dia — {hoje}
+            Resultado do dia
           </div>
           <h1
             style={{
@@ -280,8 +300,7 @@ export default function Home() {
               lineHeight: 1.1,
             }}
           >
-            SORTEIOS DA
-            <br />
+            SORTEIOS DA{" "}
             <span
               style={{
                 background: "linear-gradient(90deg, #9B30FF, #FF6B00)",
@@ -293,7 +312,6 @@ export default function Home() {
             </span>
           </h1>
 
-          {/* Indicador ao vivo */}
           <div
             style={{
               marginTop: 16,
@@ -323,12 +341,25 @@ export default function Home() {
                 letterSpacing: 1,
               }}
             >
-              ATUALIZADO
+              ATUALIZADO AUTOMATICAMENTE
             </span>
           </div>
+
+          {tempoAtual && (
+            <div
+              style={{
+                marginTop: 8,
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 11,
+                color: "rgba(255,255,255,0.2)",
+              }}
+            >
+              última busca: {tempoAtual}
+            </div>
+          )}
         </div>
 
-        {/* Cards dos sorteios */}
+        {/* Cards */}
         <div
           style={{
             display: "flex",
@@ -339,24 +370,75 @@ export default function Home() {
             alignItems: "center",
           }}
         >
-          <CardSorteio tipo="lotofacil" dados={SORTEIOS.lotofacil} />
-          <CardSorteio tipo="lotomania" dados={SORTEIOS.lotomania} />
+          <CardSorteio tipo="lotofacil" dados={lotofacil} />
+          <CardSorteio tipo="lotomania" dados={lotomania} />
         </div>
 
-        {/* Rodapé */}
         <div
           style={{
             marginTop: 60,
             fontFamily: "'DM Mono', monospace",
             fontSize: 11,
-            color: "rgba(255,255,255,0.2)",
+            color: "rgba(255,255,255,0.15)",
             letterSpacing: 2,
             textAlign: "center",
           }}
         >
-          PROVA DE CONCEITO — APENAS PARA FINS INTERNOS
+          DADOS VIA API CAIXA ECONÔMICA FEDERAL
         </div>
       </main>
     </>
   );
+}
+
+// ---------------------------------------------------------------------------
+// getStaticProps + ISR — executa no servidor, nunca expõe código ao browser
+// ---------------------------------------------------------------------------
+
+async function buscarResultado(jogo) {
+  try {
+    const url = `https://servicebus2.caixa.gov.br/portaldeloterias/api/${jogo}`;
+    const res = await fetch(url, {
+      headers: {
+        // A API da Caixa exige Referer para aceitar requisições de fora do portal
+        Referer: "https://loterias.caixa.gov.br/",
+        "User-Agent": "Mozilla/5.0",
+      },
+    });
+
+    if (!res.ok) return null;
+
+    const json = await res.json();
+
+    // listaDezenas vem como strings ["01","03",...], convertemos para número
+    const numeros = (json.listaDezenas || []).map((n) => parseInt(n, 10));
+
+    return {
+      data: json.dataApuracao || "", // formato "DD/MM/YYYY"
+      concurso: json.numero || 0,
+      numeros,
+    };
+  } catch (err) {
+    console.error(`[ISR] Erro ao buscar ${jogo}:`, err.message);
+    return null; // card mostra "sem sorteio disponível"
+  }
+}
+
+export async function getStaticProps() {
+  const [lotofacil, lotomania] = await Promise.all([
+    buscarResultado("lotofacil"),
+    buscarResultado("lotomania"),
+  ]);
+
+  return {
+    props: {
+      lotofacil, // null se a API falhou
+      lotomania,
+      geradoEm: new Date().toISOString(),
+    },
+    // ISR: Next.js regenera a página em background a cada 6 horas.
+    // A primeira requisição após esse tempo dispara a atualização;
+    // os visitantes nunca ficam esperando — sempre servem a versão em cache.
+    revalidate: 21600, // 6 horas em segundos
+  };
 }
